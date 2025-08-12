@@ -1,0 +1,78 @@
+# --- Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual env
+.venv/
+venv/
+env/
+
+# --- Build / packaging artifacts
+build/
+dist/
+wheels/
+*.egg
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# --- Tests / tooling caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+.tox/
+.nox/
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+.pylint.d/
+
+# --- IDE / OS junk
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+
+# --- Logs & temp
+logs/
+*.log
+nohup.out
+*.swp
+*.swo
+*~
+
+# --- Env & secrets
+.env
+.env.*
+.envrc
+.secrets/
+*.pem
+*.key
+
+# --- Local config you shouldn't commit
+.python-version
+/app/conf.json
+conf.json
+
+# --- Local data (DB 등)
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Docker (추적 권장 파일은 제외)
+docker-compose.yml
+docker-compose.override.yml   # 로컬 전용이면 무시 (없으면 지워도 됨)
+Dockerfile
+pyproject.toml
+
+# --- Optional: uploads/tmp 등 있으면 추가
+# uploads/
+# tmp/
+start.sh
+requirements_backup.txt
+uv.lock
