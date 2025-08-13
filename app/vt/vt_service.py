@@ -37,7 +37,9 @@ class VtService:
         return "unknown"
 
     async def analyze_ioc(self, ioc: str) -> ResponseResult[IoCResponse]:
+        print("호출되긴 하냐")
         ioc_type = self._detect_ioc_type(ioc)
+        print(ioc_type)
         if ioc_type == "unknown":
             raise HTTPException(
                 status_code=common.BAD_REQUEST.value,
@@ -45,7 +47,7 @@ class VtService:
             )
 
         vt_json = await self._get_ioc_report(ioc, ioc_type)
-
+        
         attrs: Dict[str, Any] = (vt_json.get("data") or {}).get("attributes") or {}
         stats: Dict[str, int] = attrs.get("last_analysis_stats") or attrs.get("stats") or {}
         label: Optional[str] = (attrs.get("popular_threat_classification") or {}).get(
@@ -63,6 +65,7 @@ class VtService:
             vendor_count=vendor_count,
         )
 
+        print(ioc_obj)
         db: Session = self._session_factory()
         try:
             crud.save_ioc(db, ioc_obj)

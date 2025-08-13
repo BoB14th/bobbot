@@ -4,10 +4,17 @@ from app.vt import vt_controller
 from app.slack import slack_controller
 from app.common.handlers.error_handler import setup_exception_handlers
 from contextlib import asynccontextmanager
+from app.vt.vt_service import VtService
+from app.database import SessionFactory
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    vt = VtService(SessionFactory)
+    app.state.vt = vt
+    
     app.state.slack = slack_controller.slack_service
+    app.state.slack.set_vt(vt)
+
     await app.state.slack.start()
     try:
         yield
