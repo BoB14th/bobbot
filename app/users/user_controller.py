@@ -1,21 +1,25 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from app.common.models.response import ResponseResult
-from app.users import user_service
 import app.schema as schema
 from app.logs import log_access
-from sqlalchemy.orm import Session
-from app.database import db
+from app.database import SessionFactory
 from app.utils.auth import get_api_key
+from .user_service import UserService
+from functools import lru_cache
 
 router = APIRouter()
 
+@lru_cache()
+def get_vt_service() -> UserService:
+    return UserService(SessionFactory)
+
 @router.post("/login/", response_model=ResponseResult, dependencies=[Depends(log_access), Depends(get_api_key)])
-def login(user: schema.Login, dbsession: Session = Depends(db.get_session)):
-    result = user_service.userLogin(user.email, user.password, dbsession)
+def login(user: schema.Login, userService: UserService = Depends(get_vt_service)):
+    result = userService.user_login(user.email, user.password)
     return JSONResponse(content=result.model_dump(exclude_none=True))
 
 @router.post("/join/", response_model=ResponseResult, dependencies=[Depends(log_access), Depends(get_api_key)])
-def post_create_user(user: schema.UserCreate, dbsession: Session = Depends(db.get_session)):
-    result = user_service.userJoin(user, dbsession)
+def post_create_user(user: schema.UserCreate, userService: UserService = Depends(get_vt_service)):
+    result = userService.userJoin(user)
     return JSONResponse(content=result.model_dump(exclude_none=True))
