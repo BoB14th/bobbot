@@ -10,6 +10,8 @@ from app.utils.fetch import fetch_html
 from app.utils.summarizer import HtmlSummarizer
 from fastapi.exceptions import HTTPException
 from .enums import ResponseEnum
+from app.cti.cti_service import CTIService, CTIResult
+
 logger = logging.getLogger(__name__)
 HELLO_PATTERN = re.compile(r"\bhello\b|안녕", re.IGNORECASE)
 SUMM_PATTERN  = re.compile(r"(?:^|\s)(?:요약|summary)\s*[:\-]?\s+(.+)", re.IGNORECASE | re.S)
@@ -37,6 +39,9 @@ class SlackService:
 
     def set_vt(self, vt_service):
         self.vt = vt_service
+    
+    def set_cti(self, cti_service: CTIService):
+        self.cti = cti_service
 
     async def start(self):
         if self._task and not self._task.done():
@@ -90,18 +95,8 @@ class SlackService:
         
         m = CTI_PATTERN.search(text)
         if m:
-            target = m.group(1).strip()
-            print("IOC target:", target)
-
-            try:
-                result = await self.vt.analyze_ioc(target)
-                msg = self.ioc_result_to_text(result)
-                await self.say(channel, msg)
-            except HTTPException as e:
-                await self.say(channel, f"분석 실패 ({e.status_code}): {e.detail}")
-            except Exception as e:
-                await self.say(channel, ResponseEnum.ANALYSIS_FAIL.value)
-            
+            ioc = m.group(1).strip()
+            await self._handle_cti(channel, ioc)
             return
         
         await self.say(channel, ResponseEnum.NOT_MATCH_REGEX.value)
@@ -131,35 +126,35 @@ class SlackService:
             print("summary error")
             await self.say(channel, ResponseEnum.SUMMARY_ERROR.value + e)
 
-    def ioc_result_to_text(self, res) -> str:
-        print(res)
-        if hasattr(res.result_msg, "value"):
-            msg = res.result_msg.value
-        else:
-            msg = str(res.result_msg)
+    async def _handle_cti(self, channel: str, ioc: str):
+        if not self.cti:
+            await self.say(channel, "CTI 서비스가 초기화되지 않았습니다. 관리자에게 문의하세요.")
+            return
+        try:
+            res: CTIResult = await self.cti.analyze_and_store(ioc)
+            msg = self.ioc_result_to_text(res)
+            await self.say(channel, msg)
+        except HTTPException as e:
+            await self.say(channel, f"분석 실패 ({e.status_code}): {e.detail}")
+        except Exception as e:
+            logger.exception("CTI analyze failed")
+            await self.say(channel, ResponseEnum.ANALYSIS_FAIL.value + f" ({e})")
 
-        parts = [f"*==분석 결과==*\n"]
-
-        data = getattr(res, "data", None)
-        if data:
-            ioc = getattr(data, "ioc", "")
-            ioc_type = getattr(data, "type", "")
-            malicious_score = getattr(data, "malicious_score", None)
-            vendor_count = getattr(data, "vendor_count", None)
-            threat_label = getattr(data, "suggested_threat_label", "")
-
-            detail = []
-            if ioc:
-                detail.append(f"IoC: `{ioc}` ({ioc_type})\n")
-            if malicious_score is not None and vendor_count is not None:
-                detail.append(f"*`{vendor_count}`개 보안 벤더 중 `{malicious_score}`개가 악성으로 판정*\n")
-            if threat_label:
-                detail.append(f"위협 레이블은 `{threat_label}`로 식별됨\n")
-
-            if detail:
-                parts.append("".join(detail))
-
-        return " ".join(parts)
+    def ioc_result_to_text(self, res: CTIResult) -> str:
+        vendors = ", ".join(res.vendors[:6]) if res.vendors else "-"
+        tags = ", ".join(res.tags[:8]) if res.tags else "-"
+        dns = ", ".join(res.dns[:6]) if res.dns else "-"
+        header = "*== CTI 분석 결과 ==*\n"
+        body = (
+            f"*IoC*: `{res.ioc}` ({res.ioc_type})\n"
+            f"*위험점수*: *{res.malicious_score}*/100  |  *탐지엔진 수*: {res.detect_count}\n"
+            f"*벤더*: {vendors}\n"
+            f"*태그*: {tags}\n"
+            f"*국가*: {res.country or '-'}\n"
+            f"*DNS*: {dns}"
+        )
+        
+        return header + body
 
         
     async def say(self, channel: str, text: str):
