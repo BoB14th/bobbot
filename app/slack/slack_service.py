@@ -8,7 +8,6 @@ from slack_sdk.socket_mode.response import SocketModeResponse
 from app.config import conf
 from app.utils.fetch import fetch_html
 from app.utils.summarizer import HtmlSummarizer
-from app.vt.vt_service import VtService
 from fastapi.exceptions import HTTPException
 from .enums import ResponseEnum
 logger = logging.getLogger(__name__)
@@ -34,7 +33,7 @@ class SlackService:
         self._task: Optional[asyncio.Task] = None
         self._started = asyncio.Event()
         self.vt = None
-        # self.html_summarizer = HtmlSummarizer(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+        self.html_summarizer = HtmlSummarizer(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
     def set_vt(self, vt_service):
         self.vt = vt_service
@@ -79,15 +78,15 @@ class SlackService:
             return
 
         if HELLO_PATTERN.search(text):
-            await self.say(channel, f"Hello, <@{user}>! :wave:")
+            await self.say(channel, f"안녕하세요, <@{user}>님! :wave:")
             return
 
-        # m = SUMM_PATTERN.search(text)
-        # print(m)
-        # if m:
-        #     name = m.group(1).strip()
-        #     await self._handle_summary(channel, user, name)
-        #     return
+        b = SUMM_PATTERN.search(text)
+        print(b)
+        if b:
+            name = b.group(1).strip()
+            await self._handle_summary(channel, user, name)
+            return
         
         m = CTI_PATTERN.search(text)
         if m:
@@ -96,14 +95,11 @@ class SlackService:
 
             try:
                 result = await self.vt.analyze_ioc(target)
-                print("VT result object:", result)
                 msg = self.ioc_result_to_text(result)
                 await self.say(channel, msg)
             except HTTPException as e:
-                logger.warning("VT HTTPException: %s %s", e.status_code, e.detail)
                 await self.say(channel, f"분석 실패 ({e.status_code}): {e.detail}")
             except Exception as e:
-                logger.exception("VT analyze_ioc 예외")
                 await self.say(channel, ResponseEnum.ANALYSIS_FAIL.value)
             
             return
@@ -113,28 +109,27 @@ class SlackService:
 
             
     async def _handle_summary(self, channel: str, user: str, name: str):
-        await self.say(channel, f"요약 명령 인식 ✅ 이름=`{name}`")
         if not self.html_summarizer:
-            await self.say(channel, "OPENAI_API_KEY가 설정되지 않아 요약 기능을 사용할 수 없어요.")
+            await self.say(channel, ResponseEnum.OPENAI_API_KEY_ERROR.value)
             return
 
         url = build_wiki_url(name)
         try:
-            await self.say(channel, f"요약을 준비 중입니다: `{name}` → <{url}> :mag:")
+            await self.say(channel, f"*{name}*"+ ResponseEnum.WAIT_MENTION.value)
             status, html = await fetch_html(url)
             if status == 404 or not html:
-                await self.say(channel, f"페이지가 없거나 접근할 수 없어요: <{url}>")
+                await self.say(channel, ResponseEnum.PAGE_NOT_FOUND.value)
                 return
 
             summary = await self.html_summarizer.summarize_html(url, html, title_hint=name)
-            out = f"*[{name}] 요약*\n<{url}>\n\n{summary}"
+            out = f"*[{name}]* \n\n{summary}"
             if len(out) > 2800:
                 out = out[:2700] + "\n…(생략)\n" + url
             await self.say(channel, out)
 
         except Exception as e:
-            logger.exception("summary error")
-            await self.say(channel, f"요약 중 오류가 발생했어요: {e}")
+            print("summary error")
+            await self.say(channel, ResponseEnum.SUMMARY_ERROR.value + e)
 
     def ioc_result_to_text(self, res) -> str:
         print(res)
@@ -143,7 +138,7 @@ class SlackService:
         else:
             msg = str(res.result_msg)
 
-        parts = [f"=={msg.strip()}==\n"]
+        parts = [f"*==분석 결과==*\n"]
 
         data = getattr(res, "data", None)
         if data:
@@ -155,9 +150,9 @@ class SlackService:
 
             detail = []
             if ioc:
-                detail.append(f"IoC `{ioc}` ({ioc_type})\n")
+                detail.append(f"IoC: `{ioc}` ({ioc_type})\n")
             if malicious_score is not None and vendor_count is not None:
-                detail.append(f"`{vendor_count}`개 보안 벤더 중 `{malicious_score}`개가 악성으로 판정\n")
+                detail.append(f"*`{vendor_count}`개 보안 벤더 중 `{malicious_score}`개가 악성으로 판정*\n")
             if threat_label:
                 detail.append(f"위협 레이블은 `{threat_label}`로 식별됨\n")
 
