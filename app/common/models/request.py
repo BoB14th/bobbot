@@ -14,3 +14,7 @@ class Login(BaseModel):
 
 class IoCRequest(BaseModel):
     ioc: str
+
+class SendMessageBody(BaseModel):
+    channel: str
+    text: str
