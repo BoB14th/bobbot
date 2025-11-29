@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from app.database import Base
 from datetime import datetime
 
@@ -29,4 +30,17 @@ class IoC(Base):
     vendor_count = Column(Integer)
     last_analysis_date = Column(DateTime, default=datetime.now)
     
-    
+class CTITable(Base):
+    __tablename__ = "CTITable"
+
+    id = Column(Integer, primary_key=True, index=True)
+    search_item = Column(String, index=True)
+    malicious_score = Column(Integer)
+    detect_count = Column(Integer)
+    detect_vendor = Column(Text)
+    tag = Column(Text)
+    contry = Column(String)
+    dns = Column(String)
+    _raw = Column(MEDIUMTEXT)
+
+
